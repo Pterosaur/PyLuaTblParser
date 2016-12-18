@@ -48,7 +48,7 @@ d3 = a3.dumpDict()
           "mixed": {
                1: 43,
                2: 54.33,
-               3: false,
+               3: False,
                4: 9
                "string": "value"
           },

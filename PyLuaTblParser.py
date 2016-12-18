@@ -1,15 +1,20 @@
-import functools
 import ast
 
+class NonePattern(Exception):
+    def __init__(self, arg):
+        self.__arg = arg
+    def __str__(self):
+        return self.__arg
+
+
 class SpaceFilter:
-    __space_set = set([' ','\t','\n', '\r'])
-    def __call__(self, str, pos = 0):
-        while str[pos] in SpaceFilter.__space_set:
+    space_set = set([' ','\t','\n', '\r'])
+    def __call__(self, s, pos = 0):
+        while pos < len(s) and s[pos] in SpaceFilter.space_set:
             pos+=1
         return pos
 
 def __space_filter(func):
-    # @functools.wraps(func)
     def wrapper(s = ""):
         pos = SpaceFilter()(s)
         p, t = func(s[pos:])
@@ -17,25 +22,8 @@ def __space_filter(func):
             return 0,t
         else:
             return pos + p, t
+    wrapper.__name__ = func.__name__
     return wrapper
-        
-
-def AddPythonPrefix(key, value):
-    buffer = ""
-    if isinstance(key, int) or isinstance(key, long):
-        buffer += str(key)
-    elif isinstance(key, str):
-        buffer += "\"" + key + "\""
-    else:
-        raise "KeyError"
-    buffer += ":"
-    return buffer + value.ToPythonStr()
-
-def AddLuaPrefix(value):
-    key = ""
-    if hasattr(value, "key") and isinstance(value.key, str):
-        key += "=" + value.key
-    return key + value.ToLuaStr()
 
 class Number:
     def __init__(self,data = 0,key = None): 
@@ -67,7 +55,7 @@ class NumberDelimiter:
             return 0,None
         if is_float:
             return pos, Number(float(s[:pos]))
-        return pos, Number(long(s[:pos]))
+        return pos, Number(int(s[:pos]))
 
     def FromPythonStr(self, s = ""):
         return self.__FromStr(s)
@@ -99,11 +87,54 @@ class StringDelimiter:
                     return pos + 1, String(s[1:pos], end_char)        
             pos += 1
         return 0,None
-
     def FromPythonStr(self, s):
         return self.__FromStr(s)
     def FromLuaStr(self, s = ""):
         return self.__FromStr(s)
+
+class Bool:
+    def __init__(self, b = False):
+        self.__data = b
+    def ToPythonStr(self):
+        return str(self.__data)
+    def ToLuaStr(self):
+        return str(self.__data).lower()
+    def GetRawData(self):
+        return self.__data
+
+class BoolDelimiter:
+    __py_true = "True"
+    __py_false = "False"
+    __lua_true = "true"
+    __lua_false = "false"
+    def __FromStr(self, s , false_flag, true_flag):
+        if s.find(true_flag) == 0:
+            return len(true_flag), Bool(True)
+        elif s.find(false_flag) == 0:
+            return len(false_flag), Bool(False)
+        else :
+            return 0, None
+    def FromPythonStr(self, s = ""):
+        return self.__FromStr(s, BoolDelimiter.__py_false, BoolDelimiter.__py_true)
+    def FromLuaStr(self, s = ""):
+        return self.__FromStr(s, BoolDelimiter.__lua_false, BoolDelimiter.__lua_true)
+
+class Null:
+    def ToPythonStr(self):
+        return "None"
+    def ToLuaStr(self):
+        return "nil"
+
+class NullDelimiter:
+    def __FromStr(self, s, flag):
+        if s.find(flag) == 0:
+            return len(flag),Null()
+        return 0, None
+    def FromPythonStr(self, s = ""):
+        return self.__FromStr(s,"None")
+    def FromLuaStr(self, s = ""):
+        return self.__FromStr(s,"nil")
+
 
 class List:
     def __init__(self, l = []):
@@ -121,30 +152,71 @@ class List:
             l_buffer += s.ToLuaStr() + ','
         return "{%s}" % l_buffer
     def GetRawData(self):
-        return self.__data
+        l = []
+        for i in self.__data:
+            l.append(i.GetRawData())
+        return l
     def __getitme__(self, key):
         return self.__data[key]
 
 class ListDelimiter:
-    def FromPythonStr(self, s = ""):
+    def __FromStr(self, s , begin_char, end_char, delimiter_char, generator):
         pos = 0
         l = []
-        if s[pos] != '[':
+        if s[pos] != begin_char:
             return 0,None
         pos += 1
+        delimiter_emerge = True
         while pos < len(s):
-            if s[pos] == ']':
+
+            if s[pos] == end_char: 
                 #+1 because of the skipping of end char --"]", for next parser
                 return pos + 1, List(l)
-            if s[pos] == ',' or s[pos] ==' ':
+            elif s[pos] == delimiter_char :
+                if delimiter_emerge == True:
+                    break
+                delimiter_emerge = True
+                pos += 1
+            elif s[pos] in SpaceFilter.space_set:
                 pos += 1
             else:
-                p, t= PythonStrToStruct(s[pos:])
+                if delimiter_emerge == False:
+                    break
+                delimiter_emerge = False
+                p, t= generator(s[pos:])
                 if p == 0:
                     break
                 pos += p
                 l.append(t)
         return 0, None
+
+    def FromPythonStr(self, s = ""):
+        return self.__FromStr(s, '[',']',',',PythonStrToStruct)
+
+    def FromLuaStr(self, s = ""):
+        try:
+            return self.__FromStr(s, '{','}',',',LuaStrToStruct)
+        except NonePattern:
+            return 0, None
+
+def AddPythonPrefix(key, value):
+    buffer = ""
+    if isinstance(key, int) or isinstance(key, long):
+        buffer += str(key)
+    elif isinstance(key, str):
+        buffer += "\"" + key + "\""
+    else:
+        raise "KeyError"
+    buffer += ":"
+    return buffer + value.ToPythonStr()
+
+def AddLuaPrefix(key, value):
+    # key = str(key)
+    # if isinstance(value.key, str):
+    if isinstance(key, str):
+        return str(key) + "=" + value.ToLuaStr()
+    else:
+        return value.ToLuaStr()
 
 class Dict:
     def __init__(self, d = {}):
@@ -157,10 +229,13 @@ class Dict:
     def ToLuaStr(self):
         l_buffer = ""       
         for key,value in self.__data.items():
-            if hasattr(value,"key") is False:
-                value.key = key
-            l_buffer += AddLuaPrefix(value)
+            l_buffer += AddLuaPrefix(key,value) + ","
         return "{%s}" % l_buffer
+    def GetRawData(self):
+        d = {}
+        for k, v in self.__data.items():
+            d[k] = v.GetRawData()
+        return d
     def __getitme__(self, key):
         return self.__data[key]
 
@@ -171,12 +246,21 @@ class DictDelimiter:
         if s[pos] != "{":
             return 0,None
         pos += 1
+        delimiter_emerge = True
         while pos < len(s):
             if s[pos] == "}":
                 return pos + 1, Dict(d)
-            if s[pos] == ',' or s[pos] == ' ':
+            elif s[pos] == ',' :
+                if delimiter_emerge == True:
+                    break
+                delimiter_emerge = True
+                pos += 1
+            elif s[pos] in SpaceFilter.space_set:
                 pos += 1
             else:
+                if delimiter_emerge == False:
+                    break
+                delimiter_emerge = False
                 #get key
                 p, k = PythonStrToStruct(s[pos:])
                 if p == 0:
@@ -195,29 +279,97 @@ class DictDelimiter:
                     pos += p
                     d[k.GetRawData()] = v
         return 0,None
+    def FromLuaStr(self, s = ""):
+        pos = 0
+        index = 1
+        delimiter_emerge = True
+        d = {}
+        if s[pos] != "{":
+            return 0, None
+        pos += 1
+        while pos < len(s):
+            if s[pos] == "}":
+                return pos + 1, Dict(d)
+            elif s[pos] == ',':
+                if delimiter_emerge == True:
+                    break
+                delimiter_emerge = True
+                pos += 1
+            elif s[pos] in SpaceFilter.space_set:
+                pos += 1
+            else:
+                if delimiter_emerge == False:
+                    break
+                delimiter_emerge = False
+                try:
+                    p,v = LuaStrToStruct(s[pos:])
+                    pos += p
+                    d[index] = v
+                    index += 1
+                except NonePattern:
+                    #get key
+                    #filtrate the space
+                    pos += SpaceFilter()(s[pos:])
+                    if pos == len(s):
+                        break
+                    if s[pos].isalpha() == False:
+                        break
+                    key_buffer = "" 
+                    while s[pos] != '=' and s[pos] not in SpaceFilter.space_set:
+                        key_buffer += s[pos] 
+                        pos += 1
+                        if pos == len(s):
+                            return 0, None
+                    pos += SpaceFilter()(s[pos:])
+                    if pos == len(s):
+                        break
+                    if s[pos] != '=':
+                        break
+                    pos += 1
+                    p, v = LuaStrToStruct(s[pos:])
+                    if p == 0:
+                        break
+                    else:
+                        pos += p
+                        d[key_buffer] = v
+        return 0, None
 
-            
-            
-
-def DelimiterAdaptor(s, Delimiter):
-    def Delimit():
-         return Delimiter(s)
-    return Delimit
+class DelimiterAdaptor:
+    def __init__(self, s, delimiter):
+        self.__arg = s
+        self.__delimiter = delimiter
+    def __call__(self):
+        return self.__delimiter(self.__arg)
+    def GetArg(self):
+        return self.__arg
 
 def Generator(*ds):
     for d in ds:
         pos, struct = d()
         if pos != 0:
             return pos, struct
-    raise "NonePattern"
+    raise NonePattern(ds[0].GetArg())
 
 @__space_filter
 def PythonStrToStruct(s):
     number_generator = DelimiterAdaptor(s, NumberDelimiter().FromPythonStr)
     string_generator = DelimiterAdaptor(s, StringDelimiter().FromPythonStr)
+    bool_generator   = DelimiterAdaptor(s, BoolDelimiter().FromPythonStr)
+    null_generator   = DelimiterAdaptor(s, NullDelimiter().FromPythonStr)
     list_generator   = DelimiterAdaptor(s, ListDelimiter().FromPythonStr)
     dict_generator   = DelimiterAdaptor(s, DictDelimiter().FromPythonStr)
-    return Generator(number_generator, string_generator, list_generator,dict_generator)
+    return Generator(number_generator, string_generator, bool_generator, null_generator, list_generator,dict_generator)
+
+@__space_filter
+def LuaStrToStruct(s):
+    number_generator = DelimiterAdaptor(s, NumberDelimiter().FromLuaStr)
+    string_generator = DelimiterAdaptor(s, StringDelimiter().FromLuaStr)
+    bool_generator   = DelimiterAdaptor(s, BoolDelimiter().FromLuaStr)
+    null_generator   = DelimiterAdaptor(s, NullDelimiter().FromLuaStr)
+    list_generator   = DelimiterAdaptor(s, ListDelimiter().FromLuaStr)
+    dict_generator   = DelimiterAdaptor(s, DictDelimiter().FromLuaStr)
+    return Generator(number_generator, string_generator, bool_generator,null_generator, list_generator, dict_generator)
+
 
 # def LuaStrToStruct(s):
 #     empty = None
@@ -228,44 +380,70 @@ def PythonStrToStruct(s):
 class PyLuaTblParser:
     '''load(self, s) '''
     def __init__(self):
-        self.__m_dict = {}
+        self.__data = None
 
     def load(self, s):
-        pass
+        self.__data = LuaStrToStruct(s)[1]
 
     def dump(self):
-        pass
+        if self.__data == None:
+            return ""
+        else:
+            return self.__data.ToLuaStr()
 
     def loadLuaTable(self, f):
-        pass
+        with open(f,"r") as in_file:
+            s = in_file.read()
+            self.load(s)
 
     def dumpLuaTable(self, f):
-        pass
+        with open(f,"w") as out_file:
+            if self.__data != None:
+                out_file.write(self.dump())
 
     def loadDict(self, d):
-        pass
+        self.__data = PythonStrToStruct(str(d))[1]
 
     def dumpDict(self):
-        pass
-
+        if self.__data == None:
+            return ""
+        else:
+            return self.__data.ToPythonStr()
 # s = Dict(ast.literal_eval("{1:2}"))
 # print s.ToPythonStr()
 # print s.ToLuaStr()
 
-print PythonStrToStruct('''{
-     "array": [65, 23, 5],
-     "dict": {
-          "mixed": {
-               1: 43,
-               2: 54.33,
-               3: false,
-               4: 9
-               "string": "value"
-          },
-          "array": [3, 6, 4],
-          "string": "value"
-     }
-}
- ''')[1].ToPythonStr()
+# parser = PyLuaTblParser()
 
-print "Success"
+# parser.load('''{
+#     array = {65,23,5,},
+#     dict = {
+#         mixed = {
+#             43,54.33,false,9,string = "value",
+#             },
+#             null = nil,
+#             array = {3,6,4,},
+#             string = "value",
+#     },
+# }''')
+# print parser.dump()
+# print parser.dumpDict()
+# parser.dumpLuaTable("table_test.lua")
+# # print PythonStrToStruct('''{
+# #      "array": [65, 23, 5],
+# #      "dict": {
+# #           "mixed": {
+# #                1: 43,
+# #                2: 54.33,
+# #                3: False,
+# #                4: 9,
+# #                "string": "value"
+# #           },
+# #           "null" : None,
+# #           "array": [3, 6,4],
+# #           "string": "value"
+# #      }
+# # }
+# # ''')[1].ToLuaStr()
+# parser.loadLuaTable("table_test.lua")
+# print parser.dumpDict()
