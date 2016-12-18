@@ -124,6 +124,8 @@ class Null:
         return "None"
     def ToLuaStr(self):
         return "nil"
+    def GetRawData(self):
+        return None
 
 class NullDelimiter:
     def __FromStr(self, s, flag):
@@ -408,42 +410,39 @@ class PyLuaTblParser:
         if self.__data == None:
             return ""
         else:
-            return self.__data.ToPythonStr()
-# s = Dict(ast.literal_eval("{1:2}"))
-# print s.ToPythonStr()
-# print s.ToLuaStr()
+            return self.__data.GetRawData()
 
-# parser = PyLuaTblParser()
+parser = PyLuaTblParser()
 
-# parser.load('''{
-#     array = {65,23,5,},
-#     dict = {
-#         mixed = {
-#             43,54.33,false,9,string = "value",
-#             },
-#             null = nil,
-#             array = {3,6,4,},
-#             string = "value",
-#     },
-# }''')
-# print parser.dump()
-# print parser.dumpDict()
-# parser.dumpLuaTable("table_test.lua")
-# # print PythonStrToStruct('''{
-# #      "array": [65, 23, 5],
-# #      "dict": {
-# #           "mixed": {
-# #                1: 43,
-# #                2: 54.33,
-# #                3: False,
-# #                4: 9,
-# #                "string": "value"
-# #           },
-# #           "null" : None,
-# #           "array": [3, 6,4],
-# #           "string": "value"
-# #      }
-# # }
-# # ''')[1].ToLuaStr()
-# parser.loadLuaTable("table_test.lua")
-# print parser.dumpDict()
+parser.load('''{
+    array = {65,23,5,},
+    dict = {
+        mixed = {
+            43,54.33,false,9,string = "value",
+            },
+            null = nil,
+            array = {3,6,4,},
+            string = "value",
+    },
+}''')
+print parser.dump()
+print parser.dumpDict()
+parser.dumpLuaTable("table_test.lua")
+# print PythonStrToStruct('''{
+#      "array": [65, 23, 5],
+#      "dict": {
+#           "mixed": {
+#                1: 43,
+#                2: 54.33,
+#                3: False,
+#                4: 9,
+#                "string": "value"
+#           },
+#           "null" : None,
+#           "array": [3, 6,4],
+#           "string": "value"
+#      }
+# }
+# ''')[1].ToLuaStr()
+parser.loadLuaTable("table_test.lua")
+print parser.dumpDict()
