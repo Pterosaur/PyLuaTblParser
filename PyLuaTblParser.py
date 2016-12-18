@@ -1,4 +1,3 @@
-import ast
 
 class NonePattern(Exception):
     def __init__(self, arg):
@@ -40,23 +39,27 @@ class NumberDelimiter:
     def __FromStr(self, s = ""):
         pos = 0
         is_float = False
+        is_number = False
+        is_hex = False
         while pos < len(s):
-            if False == s[pos].isdigit():
-                if pos == 0 and s[pos] == '-':
+            if s[pos].isdigit():
+                is_number = True
+                pos += 1
+            else:
+                #sign
+                if pos == 0 and (s[pos] == '-' or s[pos] == '+'):
                     pos += 1
-                    continue
-                if s[pos] == '.' and is_float == False:
+                #dot
+                elif s[pos] == '.' and is_float == False:
                     is_float = True
                     pos += 1
-                    continue
-                break
-            pos += 1
-        if pos == 0:
+                else:
+                    break
+        if is_number == False:
             return 0,None
         if is_float:
             return pos, Number(float(s[:pos]))
         return pos, Number(int(s[:pos]))
-
     def FromPythonStr(self, s = ""):
         return self.__FromStr(s)
     def FromLuaStr(self, s = ""):
@@ -138,6 +141,31 @@ class NullDelimiter:
         return self.__FromStr(s,"nil")
 
 
+def Traits(value):
+    # if isinstance(value, int) or isinstance(value, float) or isinstance(value, long):
+    #     return Number(value)
+    # elif isinstance(value, bool):
+    #     return Bool(value)
+    # elif value == None:
+    #     return Null()
+    # elif isinstance(value, str):
+    #     return String(value)
+    # elif isinstance(value, list):
+    #     return List(value)
+    # elif isinstance(value, dict):
+    #     return Dict(value)
+    # else:
+    #     raise TypeError
+    if isinstance(value, str):
+        value = '"%s"' % value
+    else:
+        value = str(value)
+    p, value = PythonStrToStruct(value)
+    if p != 0:
+        return value
+    else:
+        raise NonePattern(value)
+
 class List:
     def __init__(self, l = []):
         self.__data = l
@@ -159,7 +187,9 @@ class List:
             l.append(i.GetRawData())
         return l
     def __getitme__(self, key):
-        return self.__data[key]
+        return self.__data[key].GetRawData()
+    def __setitem__(self, key, value):
+        self.__data[key] = Traits(value)
 
 class ListDelimiter:
     def __FromStr(self, s , begin_char, end_char, delimiter_char, generator):
@@ -238,8 +268,14 @@ class Dict:
         for k, v in self.__data.items():
             d[k] = v.GetRawData()
         return d
-    def __getitme__(self, key):
-        return self.__data[key]
+    def __getitem__(self, key):
+        return self.__data[key].GetRawData()
+    def __setitem__(self, key, value):
+        self.__data[key] = Traits(value)
+    def update(self, new):
+        for k, v in new.items():
+            self.__data[k] = Traits(v)
+        # self.__data.update(Traits(new))
 
 class DictDelimiter:
     def FromPythonStr(self, s = ""):
@@ -411,38 +447,9 @@ class PyLuaTblParser:
             return ""
         else:
             return self.__data.GetRawData()
-
-parser = PyLuaTblParser()
-
-parser.load('''{
-    array = {65,23,5,},
-    dict = {
-        mixed = {
-            43,54.33,false,9,string = "value",
-            },
-            null = nil,
-            array = {3,6,4,},
-            string = "value",
-    },
-}''')
-print parser.dump()
-print parser.dumpDict()
-parser.dumpLuaTable("table_test.lua")
-# print PythonStrToStruct('''{
-#      "array": [65, 23, 5],
-#      "dict": {
-#           "mixed": {
-#                1: 43,
-#                2: 54.33,
-#                3: False,
-#                4: 9,
-#                "string": "value"
-#           },
-#           "null" : None,
-#           "array": [3, 6,4],
-#           "string": "value"
-#      }
-# }
-# ''')[1].ToLuaStr()
-parser.loadLuaTable("table_test.lua")
-print parser.dumpDict()
+    def __getitem__(self, key):
+        return self.__data[key]
+    def __setitem__(self, key, value):
+        self.__data[key] = value
+    def update(self, new):
+        self.__data.update(new)
