@@ -275,7 +275,6 @@ class Dict:
     def update(self, new):
         for k, v in new.items():
             self.__data[k] = Traits(v)
-        # self.__data.update(Traits(new))
 
 class DictDelimiter:
     def FromPythonStr(self, s = ""):
