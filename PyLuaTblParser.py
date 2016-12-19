@@ -1,11 +1,12 @@
 import track_map
 
+source_input = ""
+
 class NonePattern(Exception):
     def __init__(self, arg):
         self.__arg = arg
     def __str__(self):
         return self.__arg
-
 
 class SpaceFilter:
     space_set = set([' ','\t','\n', '\r'])
@@ -387,7 +388,8 @@ def Generator(*ds):
         if pos != 0:
             return pos, struct
     # raise NonePattern(ds[0].GetArg())
-    track_map.ascii(ds[0].GetArg())
+    global source_input
+    track_map.ascii(source_input+ "\n--------------\n" +ds[0].GetArg())
 
 @__space_filter
 def PythonStrToStruct(s):
@@ -422,6 +424,8 @@ class PyLuaTblParser:
         self.__data = None
 
     def load(self, s):
+        global source_input
+        source_input = s
         self.__data = LuaStrToStruct(s)[1]
 
     def dump(self):
