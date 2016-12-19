@@ -1,3 +1,4 @@
+import track_map
 
 class NonePattern(Exception):
     def __init__(self, arg):
@@ -385,7 +386,8 @@ def Generator(*ds):
         pos, struct = d()
         if pos != 0:
             return pos, struct
-    raise NonePattern(ds[0].GetArg())
+    # raise NonePattern(ds[0].GetArg())
+    track_map.ascii(ds[0].GetArg())
 
 @__space_filter
 def PythonStrToStruct(s):
