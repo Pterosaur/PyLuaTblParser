@@ -519,12 +519,13 @@ class DelimiterAdaptor:
             self.__arg = self.__arg[len(self.__arg) - 1:]
 
 import track_map
-source_input = ""
+
 def Generator(*ds):
     for d in ds:
         pos, struct = d()
         if pos != 0:
             return pos, struct
+    global case
     raise NonePattern(ds[0].GetArg())
     # global source_input
     # track_map.ascii(source_input+ "\n--------------\n" +ds[0].GetArg(), 10000)
@@ -582,9 +583,6 @@ class PyLuaTblParser:
         self.__data = None
 
     def load(self, s = ""):
-        # s = ("%r" % s).replace('"',"\\")
-        # s = s.replace("\"", '\\"')
-        # s.encode('string-escape')
         self.__data = LuaStrToStruct(s)[1]
 
     def dump(self):
@@ -604,7 +602,8 @@ class PyLuaTblParser:
                 out_file.write(self.dump())
 
     def loadDict(self, d):
-        self.__data = PythonStrToStruct(str(d))[1]
+        track_map.ascii(str(d)[996:], 100000)
+        # self.__data = PythonStrToStruct(str(d))[1]
 
     def dumpDict(self):
         if self.__data == None:
