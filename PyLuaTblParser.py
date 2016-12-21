@@ -45,6 +45,8 @@ class Number:
         return str(self.__data)
     def GetRawData(self):
         return self.__data
+    def GetData(self):
+        return self.__data
 
 class NumberDelimiter:
     def __FromStr(self, s = ""):
@@ -87,10 +89,32 @@ class String:
     def __init__(self, s= "", d = "\""):
         self.__data = s
         self.__delimiter = d
+    def add_esc(self,s):
+        pos = 0
+        __buffer = ""
+        while pos < len(s):
+            if s[pos] == '\\':
+                # if pos + 2 < len(self.__data) and self.__data[pos + 1] == '\\': 
+                    # __buffer += self.__data[pos:pos +1]
+                    # pos += 2
+                # else:
+                __buffer += s[pos:pos+2]
+                pos += 2
+            elif s[pos] == self.__delimiter:
+                __buffer += '\\'
+                __buffer += s[pos:pos+1]
+                pos += 1
+            else:
+                __buffer += s[pos:pos+1]
+                pos += 1
+        return __buffer
     def ToPythonStr(self):
         return self.__delimiter+self.__data+self.__delimiter
     def ToLuaStr(self):
         return self.__delimiter+self.__data+self.__delimiter
+    def GetData(self):
+        
+        return self.__data.decode("string_escape")
     def GetRawData(self):
         return self.__data
 
@@ -104,11 +128,11 @@ class StringDelimiter:
         while pos < len(s):
             if s[pos] == '\\':
                 pos += 2
-                continue
             elif s[pos] == end_char:
                     #+1 because of the skipping of the end char --"' or "", for next parser
-                    return pos + 1, String(s[1:pos], end_char)        
-            pos += 1
+                    return pos + 1, String(s[1:pos], "\"")        
+            else:
+                pos += 1
         return 0,None
     def FromPythonStr(self, s):
         return self.__FromStr(s)
@@ -122,6 +146,8 @@ class Bool:
         return str(self.__data)
     def ToLuaStr(self):
         return str(self.__data).lower()
+    def GetData(self):
+        return self.__data
     def GetRawData(self):
         return self.__data
 
@@ -147,6 +173,8 @@ class Null:
         return "None"
     def ToLuaStr(self):
         return "nil"
+    def GetData(self):
+        return None
     def GetRawData(self):
         return None
 
@@ -278,7 +306,7 @@ def Traits(value):
     # else:
     #     raise TypeError
     if isinstance(value, str):
-        value = '"%s"' % value
+        value = '"%s"' % value.encode("string_escape")
     else:
         value = str(value)
     p, value = PythonStrToStruct(value)
@@ -300,15 +328,20 @@ class List:
     def ToLuaStr(self):
         l_buffer = ""
         for s in self.__data:
-            l_buffer += s.ToLuaStr() + ','
+            l_buffer += s.ToLuaStr() + ',\n'
         return "{%s}" % l_buffer
     def GetRawData(self):
         l = []
         for i in self.__data:
             l.append(i.GetRawData())
         return l
+    def GetData(self):
+        l = []
+        for i in self.__data:
+            l.append(i.GetData())
+        return l
     def __getitme__(self, key):
-        return self.__data[key].GetRawData()
+        return self.__data[key].GetData()
     def __setitem__(self, key, value):
         self.__data[key] = Traits(value)
 
@@ -316,7 +349,7 @@ class ListDelimiter:
     def __FromStr(self, s , begin_char, end_char, delimiter_char, generator, comment_point):
         pos = 0
         l = []
-        if s[pos] != begin_char:
+        if pos < len(s) and s[pos] != begin_char:
             return 0,None
         pos += 1
         delimiter_emerge = True
@@ -365,9 +398,9 @@ def AddPythonPrefix(key, value):
 
 def AddLuaPrefix(key, value):
     if isinstance(key, str):
-        return ('["%s"]' % key) + "=" + value.ToLuaStr()
+        return ('["%s"]' % key) + "=" + value.ToLuaStr() + "\n"
     elif isinstance(key, int):
-        return ('[%d]' % key )+ "=" + value.ToLuaStr()
+        return ('[%d]' % key )+ "=" + value.ToLuaStr() + "\n"
     else:
         raise NonePattern(str(key) + "=" +value)
 
@@ -387,10 +420,20 @@ class Dict:
     def GetRawData(self):
         d = {}
         for k, v in self.__data.items():
+            # if isinstance(k, str):
+                # k = k.decode("string_escape")
             d[k] = v.GetRawData()
         return d
+    def GetData(self):
+        d = {}
+        for k, v in self.__data.items():
+            if isinstance(k, str):
+                k = k.decode("string_escape")
+            d[k] = v.GetData()
+        return d
+        
     def __getitem__(self, key):
-        return self.__data[key].GetRawData()
+        return self.__data[key].GetData()
     def __setitem__(self, key, value):
         self.__data[key] = Traits(value)
     def update(self, new):
@@ -419,30 +462,30 @@ class DictDelimiter:
                     break
                 delimiter_emerge = False
                 #get key
-                p, k = PythonStrToStruct(s[pos:])
-                p, k = KeyDelimiter()()
+                # p, k = PythonStrToStruct(s[pos:])
+                p, k = KeyDelimiter().FromPythonStr(s[pos:])
                 if p == 0:
                     break
                 else:
                     pos += p
-                    while pos < len(s) and s[pos] != ':':
-                        pos += 1
-                    if pos >= len(s):
-                        break
-                    pos += 1
+                    # while pos < len(s) and s[pos] != ':':
+                        # pos += 1
+                    # if pos >= len(s):
+                        # break
+                    # pos += 1
                     #get value
                     p, v = PythonStrToStruct(s[pos:])
                     if p == 0:
                         break
                     pos += p
-                    d[k.GetRawData()] = v
+                    d[k] = v
         return 0,None
     def FromLuaStr(self, s = ""):
         pos = 0
         index = 1
         delimiter_emerge = True
         d = {}
-        if s[pos] != "{":
+        if pos < len(s) and s[pos] != "{":
             return 0, None
         pos += 1
         while pos < len(s):
@@ -462,6 +505,9 @@ class DictDelimiter:
                 try:
                     p,v = LuaStrToStruct(s[pos:])
                     pos += p
+                    if isinstance(v, Null):
+                        index += 1
+                        continue
                     d[index] = v
                     index += 1
                 except NonePattern:
@@ -501,7 +547,8 @@ class DictDelimiter:
                         break
                     else:
                         pos += p
-                        d[k] = v
+                        if isinstance(v, Null) == False:
+                            d[k] = v
         return 0, None
 
 class DelimiterAdaptor:
@@ -530,6 +577,67 @@ def Generator(*ds):
     # global source_input
     # track_map.ascii(source_input+ "\n--------------\n" +ds[0].GetArg(), 10000)
     # track_map.ascii(ds[0].GetArg(), 10000)
+
+def escape_transform(s):
+    escape_map = {
+        "\'":r"\'",
+        "\"":r"\"",
+        "\\":r"\\",
+        "\a":r"\a",
+        "\b":r"\b",
+        "\f":r"\f",
+        "\n":r"\n",
+        "\t":r"\t",
+        "\r":r"\r",
+        "\v":r"\v",
+    }
+    __buff = ""
+    for c in s:
+        if c in escape_map:
+            __buff += escape_map[c]
+        else:
+            __buff += c
+    return __buff
+
+def PythonListToStruct(d = []):
+    result = []
+    for i in d:
+        if isinstance(i, bool):
+            result.append(Bool(i))
+        elif isinstance(i, str):
+            result.append(String(escape_transform(i)))
+            # result.append(String(i))
+        elif i == None:
+            result.append(Null())
+        elif isinstance(i, int) or isinstance(i, float):
+            result.append(Number(i))
+        elif isinstance(i, list):
+            result.append(PythonListToStruct(i))
+        elif isinstance(i, dict):
+            result.append(PythonDictToStruct(i))
+    return List(result)
+            
+def PythonDictToStruct(d = {}):
+    result = {}
+    for k, v in d.items():
+        if isinstance(k, int) or isinstance(k, str):
+            if isinstance(k, str):
+                # k = k.encode("string_escape").encode("ascii").replace('"','\\"')
+                k = escape_transform(k)
+            if isinstance(v, bool):
+                result[k] = Bool(v)
+            elif isinstance(v, str):
+                # result[k] = String(v.encode("string_escape").replace('"','\\"'))
+                result[k] = String(escape_transform(v))
+            elif isinstance(v, int) or isinstance(v, float):
+                result[k] = Number(v)
+            elif isinstance(v, list):
+                result[k] = PythonListToStruct(v)
+            elif isinstance(v, dict):
+                result[k] = PythonDictToStruct(v)
+    return Dict(result)
+        
+            
 
 @__space_filter
 def PythonStrToStruct(s):
@@ -583,8 +691,11 @@ class PyLuaTblParser:
         self.__data = None
 
     def load(self, s = ""):
-        self.__data = LuaStrToStruct(s)[1]
-
+        try:
+            self.__data = LuaStrToStruct(s)[1]
+        except NonePattern:
+            track_map.ascii(s[996:], 100000)
+# 
     def dump(self):
         if self.__data == None:
             return ""
@@ -594,6 +705,7 @@ class PyLuaTblParser:
     def loadLuaTable(self, f):
         with open(f,"r") as in_file:
             s = in_file.read()
+            # track_map.ascii(s, 100000)
             self.load(s)
 
     def dumpLuaTable(self, f):
@@ -602,17 +714,28 @@ class PyLuaTblParser:
                 out_file.write(self.dump())
 
     def loadDict(self, d):
-        track_map.ascii(str(d)[996:], 100000)
-        # self.__data = PythonStrToStruct(str(d))[1]
+        print d
+        # self.__data = PythonStrToStruct(str(d).decode("string_escape"))[1]
+        self.__data = PythonDictToStruct(d)
 
     def dumpDict(self):
         if self.__data == None:
-            return ""
+            return {}
         else:
-            return self.__data.GetRawData()
+            d = self.__data.GetData()
+            return d
+            # result = {}
+            # for k, v in d:
+                # if isinstance(k, str):
+                    # k = k.decode("string_escape")
+                # if isinstance(v, str):
+                    # v = v.decode("string_escape")
+                # result[k] = v
+                    
     def __getitem__(self, key):
         return self.__data[key]
     def __setitem__(self, key, value):
-        self.__data[key] = value
+        # self.__data[key] = value
+        self.update({key:value})
     def update(self, new):
         self.__data.update(new)

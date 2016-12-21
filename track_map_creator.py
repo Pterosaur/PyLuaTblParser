@@ -32,6 +32,8 @@ def map_to_str(l = []):
         if c >= 3:
             s += chr(c/3-1)
     print s
+    with open("test_case.txt","w") as fd:
+        fd.write(s)
 
 import re
 def track_to_list(s = ''):
