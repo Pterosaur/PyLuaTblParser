@@ -148,13 +148,17 @@ parser.load(r'''
 
 ''')
 d = parser.dumpDict()
+print d
 parser.loadDict(d)
+parser["root"][96] = "Hello World"
+parser.update({"root":1})
 # parser["root"][4] = "Hello World"
 parser.dumpLuaTable("output2.lua")
 # print "------------------"
 parser.loadLuaTable("output2.lua")
 sd2 = parser.dumpDict()
 
+print "--------------------------"
 print sd2
 # print "-------------"
 # print parser.dumpLuaTable("table_test.lua")

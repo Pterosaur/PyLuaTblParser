@@ -1,8 +1,4 @@
-{["root"]={[96]={{},
-1,
-2,
-nil,
-}
+{["root"]={[96]="Hello World"
 ,[1]="Test Pattern String"
 ,[2]={["object with 1 member"]={"array with 1 element",
 }

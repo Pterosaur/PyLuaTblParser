@@ -683,24 +683,56 @@ def LuaStrToStruct(s):
         dict_generator)
     return pos + p, v
 
-
+class VersionControl:
+    def __init__(self):
+        self.__data = None
+        self.__version_id = 0
+    
+    def GetConstData(self):
+        return self.__data
+    def GetData(self):
+        self.__version_id += 1
+        return self.__data
+    def GetVersionId(self):
+        return self.__version_id
+    
+    def SetData(self, data, vid = -1):
+        self.__data = data
+        if id != -1:
+            self.__version_id = vid
+        else:
+            self.__version_id += 1
+    
 
 class PyLuaTblParser:
     '''load(self, s) '''
     def __init__(self):
         self.__data = None
+        self.__stable = VersionControl()
+        self.__mutable = VersionControl()
 
     def load(self, s = ""):
+        # try:
+            # self.__data = LuaStrToStruct(s)[1]
+        # except NonePattern:
+            # track_map.ascii(s[996:], 100000)
         try:
-            self.__data = LuaStrToStruct(s)[1]
+            data = LuaStrToStruct(s)[1]
         except NonePattern:
             track_map.ascii(s[996:], 100000)
+        self.__stable.SetData(data, max(self.__stable.GetVersionId(), self.__mutable.GetVersionId()) + 1)
+        
 # 
     def dump(self):
-        if self.__data == None:
+        # if self.__data == None:
+            # return ""
+        # else:
+            # return self.__data.ToLuaStr()
+        data = self.__get_stable_data_()
+        if data == None:
             return ""
         else:
-            return self.__data.ToLuaStr()
+            return data.ToLuaStr()
 
     def loadLuaTable(self, f):
         with open(f,"r") as in_file:
@@ -710,20 +742,27 @@ class PyLuaTblParser:
 
     def dumpLuaTable(self, f):
         with open(f,"w") as out_file:
-            if self.__data != None:
+            # if self.__data != None:
+            if self.__get_stable_data_() != None:
                 out_file.write(self.dump())
 
     def loadDict(self, d):
-        print d
         # self.__data = PythonStrToStruct(str(d).decode("string_escape"))[1]
-        self.__data = PythonDictToStruct(d)
+        # self.__data = PythonDictToStruct(d)
+        data = PythonDictToStruct(d)
+        self.__stable.SetData(data, max(self.__stable.GetVersionId(), self.__mutable.GetVersionId()) + 1)
 
     def dumpDict(self):
-        if self.__data == None:
-            return {}
+        # if self.__data == None:
+            # return {}
+        # else:
+            # d = self.__data.GetData()
+            # return d
+        data = self.__stable.GetConstData()
+        if data == None:
+            return None
         else:
-            d = self.__data.GetData()
-            return d
+            return data.GetData()
             # result = {}
             # for k, v in d:
                 # if isinstance(k, str):
@@ -731,11 +770,31 @@ class PyLuaTblParser:
                 # if isinstance(v, str):
                     # v = v.decode("string_escape")
                 # result[k] = v
+    
+    def __get_mutalbe_data_(self):
+        if self.__mutable.GetVersionId() < self.__stable.GetVersionId():
+            vid = self.__stable.GetVersionId()
+            data = self.dumpDict()
+            self.__mutable.SetData(data, vid)
+        return self.__mutable.GetData()
+        
+    def __get_stable_data_(self):
+        if self.__mutable.GetVersionId() > self.__stable.GetVersionId():
+            vid = self.__mutable.GetVersionId()
+            data = self.__mutable.GetConstData()
+            self.loadDict(data)
+            # self.__stable.SetData(data, vid)
+        return self.__stable.GetConstData()
                     
     def __getitem__(self, key):
-        return self.__data[key]
+        data = self.__get_mutalbe_data_()
+        if data == None:
+            raise KeyError(key)
+        return data[key]
+        # return self.__data[key]
     def __setitem__(self, key, value):
         # self.__data[key] = value
-        self.update({key:value})
+        # self.update({key:value})
+        self.__get_mutalbe_data_()[key] = value
     def update(self, new):
-        self.__data.update(new)
+        self.__get_mutalbe_data_().update(new)
